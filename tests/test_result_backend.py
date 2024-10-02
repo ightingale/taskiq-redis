@@ -481,6 +481,46 @@ async def test_set_progress(redis_url: str) -> None:
 
 
 @pytest.mark.anyio
+async def test_set_progress_pubsub(redis_url: str) -> None:
+    """
+    Test that pub_progress/sub_progress works.
+
+    :param redis_url: redis URL.
+    """
+    result_backend = RedisAsyncResultBackend(  # type: ignore
+        redis_url=redis_url,
+    )
+    task_id = uuid.uuid4().hex
+
+    test_progress_1 = TaskProgress(
+        state=TaskState.STARTED,
+        meta={"message": "quarter way", "pct": 25},
+    )
+    test_progress_2 = TaskProgress(
+        state=TaskState.STARTED,
+        meta={"message": "half way", "pct": 50},
+    )
+
+    async def sub_progress(test_progress: TaskProgress):
+        sub = result_backend.sub_progress(task_id=task_id)
+        async for result in sub:
+            assert result == test_progress
+            break
+
+    task_1 = asyncio.create_task(sub_progress(test_progress_1))
+    await asyncio.sleep(0.1)
+    await result_backend.pub_progress(task_id=task_id, progress=test_progress_1)
+    await task_1
+
+    task_2 = asyncio.create_task(sub_progress(test_progress_2))
+    await asyncio.sleep(0.1)
+    await result_backend.pub_progress(task_id=task_id, progress=test_progress_2)
+    await task_2
+
+    await result_backend.shutdown()
+
+
+@pytest.mark.anyio
 async def test_set_progress_cluster(redis_cluster_url: str) -> None:
     """
     Test that set_progress/get_progress works in cluster mode.

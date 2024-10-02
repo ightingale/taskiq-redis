@@ -177,6 +177,49 @@ class RedisAsyncResultBackend(AsyncResultBackend[_ReturnType]):
 
         return taskiq_result
 
+    async def pub_progress(
+        self,
+        task_id: str,
+        progress: TaskProgress[_ReturnType],
+    ):
+        """
+        Publish task progress in redis.
+
+        Dumps TaskProgress instance into the bytes and publish
+        it to redis channel with a standard suffix on the task_id as the channel
+
+        :param task_id: ID of the task.
+        :param progress: task's TaskProgress instance.
+        """
+        redis_set_params: Dict[str, Union[str, int, bytes]] = {
+            "channel": task_id + PROGRESS_KEY_SUFFIX,
+            "message": self.serializer.dumpb(model_dump(progress)),
+        }
+
+        async with Redis(connection_pool=self.redis_pool) as redis:
+            await redis.publish(**redis_set_params)
+
+    async def sub_progress(
+        self,
+        task_id: str,
+    ) -> Union[TaskProgress[_ReturnType], None]:
+        """
+        Gets progress results from the task.
+
+        :param task_id: task's id.
+        :return: task's TaskProgress instance.
+        """
+        async with Redis(connection_pool=self.redis_pool).pubsub() as pubsub:
+            await pubsub.subscribe(task_id + PROGRESS_KEY_SUFFIX)
+            async for m in pubsub.listen():
+                if m["type"] == "message":
+                    result_value = m["data"]
+
+                    yield model_validate(
+                        TaskProgress[_ReturnType],
+                        self.serializer.loadb(result_value),
+                    )
+
     async def set_progress(
         self,
         task_id: str,
@@ -189,7 +232,7 @@ class RedisAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         it to redis with a standard suffix on the task_id as the key
 
         :param task_id: ID of the task.
-        :param result: task's TaskProgress instance.
+        :param progress: task's TaskProgress instance.
         """
         redis_set_params: Dict[str, Union[str, int, bytes]] = {
             "name": task_id + PROGRESS_KEY_SUFFIX,
@@ -365,7 +408,7 @@ class RedisAsyncClusterResultBackend(AsyncResultBackend[_ReturnType]):
         it to redis with a standard suffix on the task_id as the key
 
         :param task_id: ID of the task.
-        :param result: task's TaskProgress instance.
+        :param progress: task's TaskProgress instance.
         """
         redis_set_params: Dict[str, Union[str, int, bytes]] = {
             "name": task_id + PROGRESS_KEY_SUFFIX,
@@ -550,7 +593,7 @@ class RedisAsyncSentinelResultBackend(AsyncResultBackend[_ReturnType]):
         it to redis with a standard suffix on the task_id as the key
 
         :param task_id: ID of the task.
-        :param result: task's TaskProgress instance.
+        :param progress: task's TaskProgress instance.
         """
         redis_set_params: Dict[str, Union[str, int, bytes]] = {
             "name": task_id + PROGRESS_KEY_SUFFIX,
