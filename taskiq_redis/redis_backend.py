@@ -202,7 +202,7 @@ class RedisAsyncResultBackend(AsyncResultBackend[_ReturnType]):
     async def sub_progress(
         self,
         task_id: str,
-    ) -> Union[TaskProgress[_ReturnType], None]:
+    ) -> AsyncIterator[TaskProgress[_ReturnType]]:
         """
         Gets progress results from the task.
 
