@@ -243,6 +243,7 @@ class RedisAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         elif self.result_px_time:
             redis_set_params["px"] = self.result_px_time
 
+        await self.pub_progress(task_id, progress)
         async with Redis(connection_pool=self.redis_pool) as redis:
             await redis.set(**redis_set_params)  # type: ignore
 
