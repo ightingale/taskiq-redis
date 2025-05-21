@@ -3,7 +3,7 @@ from logging import getLogger
 from typing import Any, List, Optional
 
 from redis.asyncio import BlockingConnectionPool, Redis
-from taskiq import ScheduledTask, ScheduleSource
+from taskiq import ScheduledTask, ScheduleSource, AsyncBroker
 from taskiq.abc.serializer import TaskiqSerializer
 from taskiq.compat import model_dump, model_validate
 from taskiq.serializers import PickleSerializer
@@ -23,6 +23,7 @@ class ListRedisScheduleSource(ScheduleSource):
         serializer: Optional[TaskiqSerializer] = None,
         buffer_size: int = 50,
         skip_past_schedules: bool = False,
+        broker: Optional[AsyncBroker] = None,
         **connection_kwargs: Any,
     ) -> None:
         """
@@ -51,6 +52,11 @@ class ListRedisScheduleSource(ScheduleSource):
         self._previous_schedule_source: Optional[ScheduleSource] = None
         self._delete_schedules_after_migration: bool = True
         self._skip_past_schedules = skip_past_schedules
+        self._broker = broker
+
+    @property
+    def broker(self) -> Optional[AsyncBroker]:
+        return self._broker
 
     async def startup(self) -> None:
         """
